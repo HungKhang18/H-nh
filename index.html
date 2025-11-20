@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Tô Màu và Đồ Theo Hình (Khôi phục Tracing)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .activity-container {
+            display: flex;
+            justify-content: space-around;
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* --- PHẦN CHUNG --- */
+        .controls {
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        .reset-button {
+            padding: 8px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        .reset-button:hover {
+            background-color: #d32f2f;
+        }
+
+
+        /* --- PHẦN TÔ MÀU (BUTTERFLIES) - DÙNG CANVAS CHO PNG --- */
+        .coloring-section {
+            width: 60%;
+            border-right: 1px solid #ccc;
+            padding-right: 20px;
+        }
+        
+        .color-palette {
+            margin-bottom: 20px;
+        }
+
+        .color-swatch {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            margin: 0 5px;
+            border-radius: 50%;
+            border: 2px solid #ccc;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .color-swatch.selected {
+            border-color: black;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            transform: scale(1.1);
+        }
+
+        .butterflies {
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .butterfly-canvas {
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+        
+        /* --- PHẦN ĐỒ NÉT (TRACING) - KHÔI PHỤC VỀ BAN ĐẦU --- */
+        .tracing-section {
+            width: 40%;
+            padding-left: 20px;
+        }
+
+        #tracingCanvas {
+            border: 1px dashed #444; 
+            /* KHÔI PHỤC: Dùng SVG inline để tạo số chấm mờ */
+            background-image: url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='10' y='180' font-size='200' fill='none' stroke='%23ccc' stroke-dasharray='5 5' font-weight='bold' font-family='sans-serif'%3E4%3C/text%3E%3Ctext x='150' y='180' font-size='200' fill='none' stroke='%23ccc' stroke-dasharray='5 5' font-weight='bold' font-family='sans-serif'%3E5%3C/text%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-size: contain;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Hoạt động Học Tập: Vẽ Bướm (PNG) & Đồ Theo Hình (Khôi phục)</h1>
+
+    <div class="activity-container">
+        
+        <div class="coloring-section">
+            <h2>1. Vẽ/Tô Bướm (5 Con)</h2>
+            <p>Chọn màu và vẽ tự do lên hình bướm.</p>
+
+            <!-- Bảng màu -->
+            <div class="color-palette">
+                <div class="color-swatch selected" data-color="#FF5733" style="background-color: #FF5733;"></div>
+                <div class="color-swatch" data-color="#33FF57" style="background-color: #33FF57;"></div>
+                <div class="color-swatch" data-color="#3357FF" style="background-color: #3357FF;"></div>
+                <div class="color-swatch" data-color="#FF33C4" style="background-color: #FF33C4;"></div>
+                <div class="color-swatch" data-color="#FFD700" style="background-color: #FFD700;"></div>
+            </div>
+
+            <div class="controls">
+                 <button id="resetColoring" class="reset-button">Làm Lại (Vẽ Bướm)</button>
+            </div>
+
+            <!-- Các Canvas để vẽ trên hình bướm PNG -->
+            <div class="butterflies" id="butterflyContainer">
+                <canvas class="butterfly-canvas" width="100" height="100"></canvas>
+                <canvas class="butterfly-canvas" width="100" height="100"></canvas>
+                <canvas class="butterfly-canvas" width="100" height="100"></canvas>
+                <canvas class="butterfly-canvas" width="100" height="100"></canvas>
+                <canvas class="butterfly-canvas" width="100" height="100"></canvas>
+            </div>
+
+        </div>
+        
+        <div class="tracing-section">
+            <h2>2. Đồ Theo Hình (Số 4 & 5)</h2>
+            <p>Nhấn giữ chuột và kéo để đồ theo các số chấm mờ.</p>
+
+            <div class="controls">
+                <button id="resetTracing" class="reset-button">Làm Lại (Đồ Nét)</button>
+            </div>
+            
+            <canvas id="tracingCanvas" width="300" height="200"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        // *** THAY THẾ ĐƯỜNG DẪN NÀY BẰNG URL HÌNH ẢNH CỦA BẠN ***
+const BUTTERFLY_IMAGE_URL = 'butterfly.png';        
+        // =================================================================
+        //                 LOGIC PHẦN VẼ BƯỚM (DÙNG CANVAS TRÊN PNG)
+        // =================================================================
+
+        const colorSwatches = document.querySelectorAll('.color-swatch');
+        const butterflyCanvases = document.querySelectorAll('.butterfly-canvas');
+        const resetColoringButton = document.getElementById('resetColoring');
+        
+        let currentColor = '#FF5733'; 
+        let isDrawingButterfly = false; // Đổi tên biến để tránh xung đột
+        let lastXButterfly = 0; // Đổi tên biến để tránh xung đột
+        let lastYButterfly = 0; // Đổi tên biến để tránh xung đột
+        let activeCanvas = null; 
+        const butterflyImage = new Image(); 
+
+        // 1. Cài đặt các Canvas Bướm
+        butterflyImage.onload = function() {
+            butterflyCanvases.forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(butterflyImage, 0, 0, canvas.width, canvas.height);
+                
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = 5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // Gắn sự kiện vẽ cho mỗi canvas
+                canvas.addEventListener('mousedown', startDrawingButterfly);
+                canvas.addEventListener('mousemove', drawButterfly);
+                canvas.addEventListener('mouseup', stopDrawingButterfly);
+                canvas.addEventListener('mouseout', stopDrawingButterfly);
+
+                canvas.addEventListener('touchstart', startDrawingButterfly);
+                canvas.addEventListener('touchmove', drawButterfly);
+                canvas.addEventListener('touchend', stopDrawingButterfly);
+                canvas.addEventListener('touchcancel', stopDrawingButterfly);
+            });
+        };
+        butterflyImage.src = BUTTERFLY_IMAGE_URL; 
+        butterflyImage.crossOrigin = "Anonymous";
+
+        // 2. Xử lý chọn màu
+        colorSwatches.forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                colorSwatches.forEach(s => s.classList.remove('selected'));
+                swatch.classList.add('selected');
+                currentColor = swatch.dataset.color;
+            });
+        });
+
+        // 3. Hàm làm lại phần vẽ bướm
+        function resetColoring() {
+            butterflyCanvases.forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height); 
+                ctx.drawImage(butterflyImage, 0, 0, canvas.width, canvas.height);
+            });
+        }
+        resetColoringButton.addEventListener('click', resetColoring);
+
+
+        // 4. Logic Vẽ trên Canvas Bướm
+        function startDrawingButterfly(e) {
+            activeCanvas = e.currentTarget;
+            isDrawingButterfly = true;
+            [lastXButterfly, lastYButterfly] = getMousePos(activeCanvas, e);
+        }
+
+        function drawButterfly(e) {
+            if (!isDrawingButterfly || activeCanvas !== e.currentTarget) return; 
+            e.preventDefault(); 
+            
+            const ctx = activeCanvas.getContext('2d');
+            ctx.strokeStyle = currentColor;
+            
+            ctx.beginPath();
+            ctx.moveTo(lastXButterfly, lastYButterfly); 
+            
+            const [currentX, currentY] = getMousePos(activeCanvas, e);
+            ctx.lineTo(currentX, currentY); 
+            ctx.stroke();
+
+            [lastXButterfly, lastYButterfly] = [currentX, currentY]; 
+        }
+
+        function stopDrawingButterfly() {
+            isDrawingButterfly = false;
+            activeCanvas = null;
+        }
+
+        // =================================================================
+        //                 LOGIC PHẦN ĐỒ NÉT (TRACING) - KHÔI PHỤC
+        // =================================================================
+
+        const tracingCanvas = document.getElementById('tracingCanvas');
+        const tracingCtx = tracingCanvas.getContext('2d');
+        const resetTracingButton = document.getElementById('resetTracing');
+
+        let isDrawing = false; // Sử dụng lại biến của logic cũ
+        let lastX = 0; // Sử dụng lại biến của logic cũ
+        let lastY = 0; // Sử dụng lại biến của logic cũ
+
+        // Cài đặt nét vẽ
+        tracingCtx.strokeStyle = 'blue';
+        tracingCtx.lineWidth = 5;
+        tracingCtx.lineCap = 'round';
+        tracingCtx.lineJoin = 'round';
+
+        // Hàm lấy vị trí chuột/chạm chính xác (DÙNG CHUNG)
+        function getMousePos(canvas, event) {
+            const rect = canvas.getBoundingClientRect();
+            let x, y;
+
+            if (event.touches) { 
+                x = event.touches[0].clientX - rect.left;
+                y = event.touches[0].clientY - rect.top;
+            } else { 
+                x = event.clientX - rect.left;
+                y = event.clientY - rect.top;
+            }
+            return [x, y];
+        }
+
+        // 1. Hàm làm lại phần đồ nét (CHỈ XÓA CANVAS)
+        function resetTracing() {
+            tracingCtx.clearRect(0, 0, tracingCanvas.width, tracingCanvas.height); 
+        }
+        resetTracingButton.addEventListener('click', resetTracing);
+
+
+        // 2. Bắt đầu vẽ (KHÔI PHỤC LOGIC CŨ)
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = getMousePos(tracingCanvas, e);
+        }
+
+        // 3. Vẽ khi di chuyển chuột (KHÔI PHỤC LOGIC CŨ)
+        function draw(e) {
+            if (!isDrawing) return; 
+            e.preventDefault(); 
+            
+            tracingCtx.beginPath();
+            tracingCtx.moveTo(lastX, lastY); 
+            
+            const [currentX, currentY] = getMousePos(tracingCanvas, e);
+            tracingCtx.lineTo(currentX, currentY); 
+            tracingCtx.stroke();
+
+            [lastX, lastY] = [currentX, currentY]; 
+        }
+
+        // 4. Dừng vẽ (KHÔI PHỤC LOGIC CŨ)
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // Đính kèm sự kiện cho canvas đồ nét (KHÔI PHỤC LOGIC CŨ)
+        tracingCanvas.addEventListener('mousedown', startDrawing);
+        tracingCanvas.addEventListener('mousemove', draw);
+        tracingCanvas.addEventListener('mouseup', stopDrawing);
+        tracingCanvas.addEventListener('mouseout', stopDrawing);
+        tracingCanvas.addEventListener('touchstart', startDrawing);
+        tracingCanvas.addEventListener('touchmove', draw);
+        tracingCanvas.addEventListener('touchend', stopDrawing);
+        tracingCanvas.addEventListener('touchcancel', stopDrawing);
+    </script>
+</body>
+</html>
